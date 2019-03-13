@@ -1,7 +1,7 @@
 # Artificial-Intelligence-Deep-Q-Learning
 
 Overview
-+++
+===
 
 The goal of this directory is to implement a Neural Network and develop an car AI that uses 
 Deep Q Learning to learn how to drive around a race track while following the edge of the track
@@ -24,5 +24,5 @@ map.py
 
 Play area/map for car to drive around in. 
 
-Acquired from (SuperDataScience)[https://www.superdatascience.com/pages/artificial-intelligence]
+Acquired from [SuperDataScience](https://www.superdatascience.com/pages/artificial-intelligence)
 to help make testing the AI easier
