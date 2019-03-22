@@ -61,4 +61,71 @@ class Replay(object):
     #convert samples to Variables containing Tensors and Gradients
     return map(lambda x: Variable(torch.cat(x)), samples)
 
-#---------------Deep Q Learning---------------
+#---------------Deep Q Network--------------- Step 9
+class Dqn():
+
+  #inputQty:   number of inputs in NN input layer
+  #numActions: number of outputs in NN output layer
+  #gamma:     delay coefficient
+  def __init__(self, inputQty, numActions, gamma):
+    self.lastAction   = 0
+    self.lastReward   = 0
+    self.rewardWindow = []      #mean of rewards over time
+    self.gamma        = gamma
+    self.memory       = Replay(100000) #capacity of memory
+    self.model        = Network(inputQty, numActions)
+    self.lastState    = torch.Tensor(inputQty).unsqueeze(0)
+    self.optimizer    = optim.Adam(self.model.parameters(), lr = 0.001)
+
+  def selectAction(self, state):  #Step 10
+    #values of probabilities of q values
+    probs  = F.softmax(self.model(Variable(state, volatile = True)) * 0) #T = 7, inflates q values so q network is more confident in its action
+    action = probs.multinomial() #decide action
+    return action.data[0,0] 
+
+  def learn(self, batchState, batchNextState, batchReward, batchAction): #step11
+    outputs = self.model(batchState).gather(1, batchAction.unsqueeze(1)).squeeze(1) #1 is action
+    nextOutputs = self.model(batchNextState).detach().max(1)[0] #take all the batches of states seperate them into tuples, find max of the actions, out of state
+    target = self.gamma * nextOutputs + batchReward #guess
+    tdLoss = F.smooth_l1_loss(outputs, target)      #guess - actual
+    self.optimizer.zero_grad()  #reset optimizer
+    tdLoss.backward(retain_variables = True)  #back propogate tsLoss through network
+    self.optimizer.step() #update weights
+
+  #update states after an action has been done
+  def update(self, reward, signal):
+    newState = torch.Tensor(signal).float().unsqueeze(0) #convert state value sent by car readings to a tensor
+    self.memory.push((self.lastState, newState, torch.LongTensor([int(self.lastAction)]), torch.Tensor([self.lastReward]))) #add state results to memory
+    action = self.selectAction(newState) #determine new action to take
+    if( len(self.memory.memory) > 100 ):  #when batch size is enough, learn
+      batchState, batchNextState, batchReward, batchAction = self.memory.getSample(100)
+      self.learn(batchState, batchNextState, batchReward, batchAction)
+    self.lastAction = action
+    self.lastState  = newState
+    self.lastReward = reward 
+    self.rewardWindow.append(reward)
+    if( len(self.rewardWindow) > 1000 ):
+      del self.rewardWindow[0]
+    return action
+
+  def score(self):
+    return sum(self.rewardWindow) / ( len(self.rewardWindow) + 1 )
+
+  def save(self):
+    torch.save(
+      {
+        'state_dict': self.model.state_dict(),
+        'optimizer' : self.optimizer.state_dict()
+      },
+      'last_brain.pth'  #file name
+    )
+
+  def load(self):
+    if(os.path.isfile('last_brain.pth')):
+      print('=> loading checkpoint...')
+      checkpoint = torch.load('last_brain.pth')
+      self.model.load_state_dict(checkpoint['state_dict'])
+      self.optimizer.load_state_dict(checkpoint['optimizer'])
+      print('done.')
+    else:
+      print('No checkpoint found...')
